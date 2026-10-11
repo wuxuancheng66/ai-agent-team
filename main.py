@@ -14,13 +14,7 @@ import logging
 import sys
 from typing import Optional, Tuple
 
-from dotenv import load_dotenv
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt
-from rich.table import Table
-
-console = Console()
+console = None
 
 BANNER = "[bold cyan]AI Agent Team[/] · 多智能体协作流水线\n研究员 · 写手 · 审校员 · 代码助手 · 数据分析师"
 
@@ -33,6 +27,7 @@ def parse_args() -> argparse.Namespace:
                         help="工作流输入（URL / PDF 路径 / 主题 / 需求描述）")
     parser.add_argument("--task", help="自定义任务描述（动态分解为流水线）")
     parser.add_argument("--config", default="agent_config.yaml", help="配置文件路径")
+    parser.add_argument("--check", action="store_true", help="离线检查依赖，不读取密钥、不调用模型")
     parser.add_argument("--verbose", action="store_true", help="输出 DEBUG 日志")
     return parser.parse_args()
 
@@ -93,8 +88,26 @@ def print_summary(result: dict) -> None:
 
 
 def main() -> int:
-    load_dotenv()
     args = parse_args()
+    if args.check:
+        import importlib.util
+        import json
+        modules = ["dotenv", "rich", "yaml", "langchain_core", "langchain_openai", "langgraph", "httpx", "bs4", "pypdf"]
+        available = {name: importlib.util.find_spec(name) is not None for name in modules}
+        print(json.dumps({"dependencies": available, "ready": all(available.values())}, ensure_ascii=False, indent=2))
+        return 0 if all(available.values()) else 1
+    global console, Panel, Prompt, Table
+    try:
+        from dotenv import load_dotenv
+        from rich.console import Console
+        from rich.panel import Panel
+        from rich.prompt import Prompt
+        from rich.table import Table
+    except ImportError:
+        print("运行依赖不完整。请先查看 README 的安装说明；可用 --check 离线诊断。", file=sys.stderr)
+        return 1
+    console = Console()
+    load_dotenv()
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
